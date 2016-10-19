@@ -25,10 +25,10 @@ function createKeyedArray(obj) {
 // originOrDestination: up|down|left|right
 // verticalValue: amplitude for up/down animations
 // horizontalValue: amplitude for left/right animations
-function getAnimationValueForDirection(direction, originOrDestination, verticalValue, horizontalValue) {
+function getAnimationValueForDirection(modifier, direction, originOrDestination, verticalValue, horizontalValue) {
   const isVertical = originOrDestination === 'up' || originOrDestination === 'down';
-  const modifier = (isVertical && direction === 'out' ? -1 : 1) * (originOrDestination === 'down' || originOrDestination === 'left' ? -1 : 1);
-  return modifier * (isVertical ? verticalValue : horizontalValue);
+  const modifierFactor = (isVertical && direction === 'out' ? -modifier : modifier) * (originOrDestination === 'down' || originOrDestination === 'left' ? -modifier : modifier);
+  return modifierFactor * (isVertical ? verticalValue : horizontalValue);
 }
 
 // Animations starting with these keywords use element dimensions
@@ -169,6 +169,7 @@ export function createAnimatableComponent(component) {
       duration: PropTypes.number,
       direction: PropTypes.oneOf(['normal', 'reverse', 'alternate', 'alternate-reverse']),
       delay: PropTypes.number,
+      modifier: PropTypes.number,
       easing: PropTypes.oneOf(Object.keys(EASING_FUNCTIONS)),
       iterationCount(props, propName, componentName) {
         const val = props[propName];
@@ -185,6 +186,7 @@ export function createAnimatableComponent(component) {
     };
 
     static defaultProps = {
+      modifier: 1,
       iterationCount: 1,
       onAnimationBegin() {},
       onAnimationEnd() {},
@@ -251,13 +253,13 @@ export function createAnimatableComponent(component) {
     }
 
     componentDidMount() {
-      const { animation, duration, delay, onAnimationBegin, onAnimationEnd } = this.props;
+      const { animation, duration, delay, modifier, onAnimationBegin, onAnimationEnd } = this.props;
       if (animation) {
         if (delay) {
           this.setState({ scheduledAnimation: animation });
           this._timer = setTimeout(() =>{
             onAnimationBegin();
-            this.setState({ scheduledAnimation: false }, () => this[animation](duration).then(onAnimationEnd));
+            this.setState({ scheduledAnimation: false }, () => this[animation](duration, modifier).then(onAnimationEnd));
             this._timer = false;
           }, delay);
           return;
@@ -271,7 +273,7 @@ export function createAnimatableComponent(component) {
           }
         }
         onAnimationBegin();
-        this[animation](duration).then(onAnimationEnd);
+        this[animation](duration, modifier).then(onAnimationEnd);
       }
     }
 
@@ -282,7 +284,7 @@ export function createAnimatableComponent(component) {
     }
 
     componentWillReceiveProps(props) {
-      const { animation, duration, easing, transition, onAnimationBegin, onAnimationEnd } = props;
+      const { animation, duration, modifier, easing, transition, onAnimationBegin, onAnimationEnd } = props;
 
       if (transition) {
         const values = getStyleValues(transition, props.style);
@@ -293,7 +295,7 @@ export function createAnimatableComponent(component) {
             this.setState({ scheduledAnimation: animation });
           } else {
             onAnimationBegin();
-            this[animation](duration).then(onAnimationEnd);
+            this[animation](duration, modifier).then(onAnimationEnd);
           }
         } else {
           this.stopAnimation();
@@ -605,7 +607,7 @@ export function createAnimatableComponent(component) {
       });
     }
 
-    _bounce(duration, direction, originOrDestination) {
+    _bounce(duration, modifier, direction, originOrDestination) {
       let style = {
         opacity: this.state.animationValue.interpolate({
           inputRange: (direction === 'in' ? [0, 0.6, 1] : [0, 0.55, 1]),
@@ -613,21 +615,21 @@ export function createAnimatableComponent(component) {
         }),
       };
       if (originOrDestination) {
-        style.transform = createKeyedArray(this._getBounceTransformation(direction, originOrDestination));
+        style.transform = createKeyedArray(this._getBounceTransformation(modifier, direction, originOrDestination));
       }
       return this.animate(duration, style);
     }
 
-    _getBounceTransformation(direction, originOrDestination) {
+    _getBounceTransformation(modifier, direction, originOrDestination) {
       const windowSize = Dimensions.get('window');
-      const animationValue = getAnimationValueForDirection(direction, originOrDestination, windowSize.height, windowSize.width);
+      const animationValue = getAnimationValueForDirection(modifier, direction, originOrDestination, windowSize.height, windowSize.width);
       const translateKey = (originOrDestination === 'up' || originOrDestination === 'down' ? 'translateY' : 'translateX');
-      const modifier = animationValue > 0 ? 1 : -1;
+      const modifierFactor = animationValue > 0 ? 1 : -1;
 
       return {
         [translateKey]: this.state.animationValue.interpolate({
           inputRange: (direction === 'in' ? [0, 0.6, 0.75, 0.9, 1] : [0, 0.2, 0.4, 0.45, 1]),
-          outputRange: (direction === 'in' ? [animationValue, 25 * modifier, -10 * modifier, 5 * modifier, 0] : [0, 10 * modifier, -20 * modifier, -20 * modifier, animationValue]),
+          outputRange: (direction === 'in' ? [animationValue, 25 * modifierFactor, -10 * modifierFactor, 5 * modifierFactor, 0] : [0, 10 * modifierFactor, -20 * modifierFactor, -20 * modifierFactor, animationValue]),
         }),
       };
     }
@@ -662,36 +664,36 @@ export function createAnimatableComponent(component) {
       });
     }
 
-    bounceInDown(duration) {
-      return this._bounce(duration, 'in', 'down');
+    bounceInDown(duration, modifier) {
+      return this._bounce(duration, modifier, 'in', 'down');
     }
 
-    bounceInUp(duration) {
-      return this._bounce(duration, 'in', 'up');
+    bounceInUp(duration, modifier) {
+      return this._bounce(duration, modifier, 'in', 'up');
     }
 
-    bounceInLeft(duration) {
-      return this._bounce(duration, 'in', 'left');
+    bounceInLeft(duration, modifier) {
+      return this._bounce(duration, modifier, 'in', 'left');
     }
 
-    bounceInRight(duration) {
-      return this._bounce(duration, 'in', 'right');
+    bounceInRight(duration, modifier) {
+      return this._bounce(duration, modifier, 'in', 'right');
     }
 
-    bounceOutDown(duration) {
-      return this._bounce(duration, 'out', 'down');
+    bounceOutDown(duration, modifier) {
+      return this._bounce(duration, modifier, 'out', 'down');
     }
 
-    bounceOutUp(duration) {
-      return this._bounce(duration, 'out', 'up');
+    bounceOutUp(duration, modifier) {
+      return this._bounce(duration, modifier, 'out', 'up');
     }
 
-    bounceOutLeft(duration) {
-      return this._bounce(duration, 'out', 'left');
+    bounceOutLeft(duration, modifier) {
+      return this._bounce(duration, modifier, 'out', 'left');
     }
 
-    bounceOutRight(duration) {
-      return this._bounce(duration, 'out', 'right');
+    bounceOutRight(duration, modifier) {
+      return this._bounce(duration, modifier, 'out', 'right');
     }
 
     flipInX(duration) {
@@ -796,7 +798,7 @@ export function createAnimatableComponent(component) {
       });
     }
 
-    _fade(duration, direction, originOrDestination, isBig) {
+    _fade(duration, modifier, direction, originOrDestination, isBig) {
       let style = {
         opacity: this.state.animationValue.interpolate({
           inputRange: [0, 1],
@@ -804,86 +806,86 @@ export function createAnimatableComponent(component) {
         }),
       };
       if (originOrDestination) {
-        style.transform = createKeyedArray(this._getSlideTransformation(direction, originOrDestination, isBig));
+        style.transform = createKeyedArray(this._getSlideTransformation(modifier, direction, originOrDestination, isBig));
       }
       return this.animate(duration, style);
     }
 
-    fadeIn(duration) {
-      return this._fade(duration, 'in');
+    fadeIn(duration, modifier) {
+      return this._fade(duration, modifier, 'in');
     }
 
-    fadeInDown(duration) {
-      return this._fade(duration, 'in', 'down');
+    fadeInDown(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'down');
     }
 
-    fadeInUp(duration) {
-      return this._fade(duration, 'in', 'up');
+    fadeInUp(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'up');
     }
 
-    fadeInLeft(duration) {
-      return this._fade(duration, 'in', 'left');
+    fadeInLeft(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'left');
     }
 
-    fadeInRight(duration) {
-      return this._fade(duration, 'in', 'right');
+    fadeInRight(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'right');
     }
 
-    fadeOut(duration) {
-      return this._fade(duration, 'out');
+    fadeOut(duration, modifier) {
+      return this._fade(duration, modifier, 'out');
     }
 
-    fadeOutDown(duration) {
-      return this._fade(duration, 'out', 'down');
+    fadeOutDown(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'down');
     }
 
-    fadeOutUp(duration) {
-      return this._fade(duration, 'out', 'up');
+    fadeOutUp(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'up');
     }
 
-    fadeOutLeft(duration) {
-      return this._fade(duration, 'out', 'left');
+    fadeOutLeft(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'left');
     }
 
-    fadeOutRight(duration) {
-      return this._fade(duration, 'out', 'right');
+    fadeOutRight(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'right');
     }
 
-    fadeInDownBig(duration) {
-      return this._fade(duration, 'in', 'down', true);
+    fadeInDownBig(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'down', true);
     }
 
-    fadeInUpBig(duration) {
-      return this._fade(duration, 'in', 'up', true);
+    fadeInUpBig(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'up', true);
     }
 
-    fadeInLeftBig(duration) {
-      return this._fade(duration, 'in', 'left', true);
+    fadeInLeftBig(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'left', true);
     }
 
-    fadeInRightBig(duration) {
-      return this._fade(duration, 'in', 'right', true);
+    fadeInRightBig(duration, modifier) {
+      return this._fade(duration, modifier, 'in', 'right', true);
     }
 
-    fadeOutDownBig(duration) {
-      return this._fade(duration, 'out', 'down', true);
+    fadeOutDownBig(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'down', true);
     }
 
-    fadeOutUpBig(duration) {
-      return this._fade(duration, 'out', 'up', true);
+    fadeOutUpBig(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'up', true);
     }
 
-    fadeOutLeftBig(duration) {
-      return this._fade(duration, 'out', 'left', true);
+    fadeOutLeftBig(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'left', true);
     }
 
-    fadeOutRightBig(duration) {
-      return this._fade(duration, 'out', 'right', true);
+    fadeOutRightBig(duration, modifier) {
+      return this._fade(duration, modifier, 'out', 'right', true);
     }
 
-    _getSlideTransformation(direction, originOrDestination, isBig) {
+    _getSlideTransformation(modifier, direction, originOrDestination, isBig) {
       const size = (isBig || !this._layout ? Dimensions.get('window') : this._layout);
-      const animationValue = getAnimationValueForDirection(direction, originOrDestination, size.height, size.width);
+      const animationValue = getAnimationValueForDirection(modifier, direction, originOrDestination, size.height, size.width);
       const translateKey = (originOrDestination === 'up' || originOrDestination === 'down' ? 'translateY' : 'translateX');
 
       return {
@@ -894,45 +896,45 @@ export function createAnimatableComponent(component) {
       };
     }
 
-    _slide(duration, direction, originOrDestination) {
+    _slide(duration, modifier, direction, originOrDestination) {
       return this.animate(duration, {
-        transform: createKeyedArray(this._getSlideTransformation(direction, originOrDestination)),
+        transform: createKeyedArray(this._getSlideTransformation(modifier, direction, originOrDestination)),
       });
     }
 
-    slideInDown(duration) {
-      return this._slide(duration, 'in', 'down');
+    slideInDown(duration, modifier) {
+      return this._slide(duration, modifier, 'in', 'down');
     }
 
-    slideInUp(duration) {
-      return this._slide(duration, 'in', 'up');
+    slideInUp(duration, modifier) {
+      return this._slide(duration, modifier, 'in', 'up');
     }
 
-    slideInLeft(duration) {
-      return this._slide(duration, 'in', 'left');
+    slideInLeft(duration, modifier) {
+      return this._slide(duration, modifier, 'in', 'left');
     }
 
-    slideInRight(duration) {
-      return this._slide(duration, 'in', 'right');
+    slideInRight(duration, modifier) {
+      return this._slide(duration, modifier, 'in', 'right');
     }
 
-    slideOutDown(duration) {
-      return this._slide(duration, 'out', 'down');
+    slideOutDown(duration, modifier) {
+      return this._slide(duration, modifier, 'out', 'down');
     }
 
-    slideOutUp(duration) {
-      return this._slide(duration, 'out', 'up');
+    slideOutUp(duration, modifier) {
+      return this._slide(duration, modifier, 'out', 'up');
     }
 
-    slideOutLeft(duration) {
-      return this._slide(duration, 'out', 'left');
+    slideOutLeft(duration, modifier) {
+      return this._slide(duration, modifier, 'out', 'left');
     }
 
-    slideOutRight(duration) {
-      return this._slide(duration, 'out', 'right');
+    slideOutRight(duration, modifier) {
+      return this._slide(duration, modifier, 'out', 'right');
     }
 
-    _zoom(duration, direction, originOrDestination) {
+    _zoom(duration, modifier, direction, originOrDestination) {
       let style = {
         opacity: this.state.animationValue.interpolate({
           inputRange: (direction === 'in' ? [0, 0.6, 1] : [0, 0.4, 1]),
@@ -940,16 +942,16 @@ export function createAnimatableComponent(component) {
         }),
       };
       if (originOrDestination) {
-        style.transform = createKeyedArray(this._getZoomTransformation(direction, originOrDestination));
+        style.transform = createKeyedArray(this._getZoomTransformation(modifier, direction, originOrDestination));
       }
       return this.animate(duration, style);
     }
 
-    _getZoomTransformation(direction, originOrDestination) {
+    _getZoomTransformation(modifier, direction, originOrDestination) {
       const windowSize = Dimensions.get('window');
-      const animationValue = getAnimationValueForDirection(direction, originOrDestination, windowSize.height, windowSize.width);
+      const animationValue = getAnimationValueForDirection(modifier, direction, originOrDestination, windowSize.height, windowSize.width);
       const translateKey = (originOrDestination === 'up' || originOrDestination === 'down' ? 'translateY' : 'translateX');
-      const modifier = animationValue > 0 ? 1 : -1;
+      const modifierFactor = animationValue > 0 ? 1 : -1;
 
       return {
         scale: this.state.animationValue.interpolate({
@@ -958,7 +960,7 @@ export function createAnimatableComponent(component) {
         }),
         [translateKey]: this.state.animationValue.interpolate({
           inputRange: (direction === 'in' ? [0, 0.6, 1] : [0, 0.4, 1]),
-          outputRange: (direction === 'in' ? [animationValue, -60 * modifier, 0] : [0, -60 * modifier, animationValue]),
+          outputRange: (direction === 'in' ? [animationValue, -60 * modifierFactor, 0] : [0, -60 * modifierFactor, animationValue]),
         }),
       };
     }
@@ -993,36 +995,36 @@ export function createAnimatableComponent(component) {
       });
     }
 
-    zoomInDown(duration) {
-      return this._zoom(duration, 'in', 'down');
+    zoomInDown(duration, modifier) {
+      return this._zoom(duration, modifier, 'in', 'down');
     }
 
-    zoomInUp(duration) {
-      return this._zoom(duration, 'in', 'up');
+    zoomInUp(duration, modifier) {
+      return this._zoom(duration, modifier, 'in', 'up');
     }
 
-    zoomInLeft(duration) {
-      return this._zoom(duration, 'in', 'left');
+    zoomInLeft(duration, modifier) {
+      return this._zoom(duration, modifier, 'in', 'left');
     }
 
-    zoomInRight(duration) {
-      return this._zoom(duration, 'in', 'right');
+    zoomInRight(duration, modifier) {
+      return this._zoom(duration, modifier, 'in', 'right');
     }
 
-    zoomOutDown(duration) {
-      return this._zoom(duration, 'out', 'down');
+    zoomOutDown(duration, modifier) {
+      return this._zoom(duration, modifier, 'out', 'down');
     }
 
-    zoomOutUp(duration) {
-      return this._zoom(duration, 'out', 'up');
+    zoomOutUp(duration, modifier) {
+      return this._zoom(duration, modifier, 'out', 'up');
     }
 
-    zoomOutLeft(duration) {
-      return this._zoom(duration, 'out', 'left');
+    zoomOutLeft(duration, modifier) {
+      return this._zoom(duration, modifier, 'out', 'left');
     }
 
-    zoomOutRight(duration) {
-      return this._zoom(duration, 'out', 'right');
+    zoomOutRight(duration, modifier) {
+      return this._zoom(duration, modifier, 'out', 'right');
     }
 
     render() {
