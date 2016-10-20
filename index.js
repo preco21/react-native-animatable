@@ -304,7 +304,7 @@ export function createAnimatableComponent(component) {
     }
 
     _handleLayout(event) {
-      const { duration, onLayout, onAnimationBegin, onAnimationEnd } = this.props;
+      const { duration, modifier, onLayout, onAnimationBegin, onAnimationEnd } = this.props;
       const { scheduledAnimation } = this.state;
 
       this._layout = event.nativeEvent.layout;
@@ -315,7 +315,7 @@ export function createAnimatableComponent(component) {
       if (scheduledAnimation && !this._timer) {
         onAnimationBegin();
         this.setState({ scheduledAnimation: false }, () => {
-          this[scheduledAnimation](duration).then(onAnimationEnd);
+          this[scheduledAnimation](duration, modifier).then(onAnimationEnd);
         });
       }
     }
